@@ -1,0 +1,10 @@
+name = "advent_of_code_2025"
+version = "1.0.0"
+target = "erlang"
+description = "Advent of Code 2025 by Tyler Church"
+licences = ["MIT"]
+repository = { type = "github", user = "tylerc", repo = "advent-of-code-2025" }
+gleam = ">=1.13.0"
+
+[dependencies]
+gleam_stdlib = ">= 0.44.0 and < 2.0.0"
