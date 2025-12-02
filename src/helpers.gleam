@@ -92,7 +92,13 @@ fn measure_solution(solution: Solution) {
     <> " | Part "
     <> int.to_string(solution.part)
     <> " | "
-    <> string.pad_start(int.to_string(result), 7, " ")
+    <> {
+      case solution.kind {
+        Example -> "Example | "
+        Real -> "Real    | "
+      }
+    }
+    <> string.pad_start(int.to_string(result), 12, " ")
     <> " |"
     <> string.pad_start(int.to_string(time) <> units, 7, " ")
     <> " | ",
@@ -100,7 +106,7 @@ fn measure_solution(solution: Solution) {
 }
 
 pub fn measure_solutions(solutions: List(Solution)) {
-  io.println("+--------+--------+---------+--------+")
+  io.println("+--------+--------+---------+--------------+--------+")
   list.each(solutions, measure_solution)
-  io.println("+--------+--------+---------+--------+")
+  io.println("+--------+--------+---------+--------------+--------+")
 }
