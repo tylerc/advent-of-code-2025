@@ -8,3 +8,4 @@ gleam = ">=1.13.0"
 
 [dependencies]
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"
+gleam_time = ">= 1.6.0 and < 2.0.0"

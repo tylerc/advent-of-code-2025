@@ -1,5 +1,7 @@
 import day01
+import gleam/list
+import helpers
 
 pub fn main() -> Nil {
-  day01.main()
+  helpers.measure_solutions(list.flatten([day01.solutions()]))
 }

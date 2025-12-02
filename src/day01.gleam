@@ -1,7 +1,8 @@
 import gleam/int
 import gleam/list
+import gleam/option.{Some}
 import gleam/string
-import helpers.{read_file}
+import helpers.{type Solution, Example, Real, Solution, measure_solutions}
 
 type Direction {
   Left
@@ -75,8 +76,8 @@ fn rotate_dial_and_count_zeroes_part_1(rotations: List(Rotation)) -> Int {
   }).1
 }
 
-fn day01_part_1(filename: String) {
-  read_file(filename)
+fn day01_part_1(input: String) {
+  input
   |> input_to_rotations
   |> rotate_dial_and_count_zeroes_part_1
 }
@@ -90,17 +91,13 @@ fn rotate_dial_and_count_zeroes_part_2(rotations: List(Rotation)) -> Int {
   }).1
 }
 
-fn day01_part_2(filename: String) {
-  read_file(filename)
+fn day01_part_2(input: String) {
+  input
   |> input_to_rotations
   |> rotate_dial_and_count_zeroes_part_2
 }
 
-pub fn main() -> Nil {
-  let assert 3 = day01_part_1("inputs/day01_example.txt")
-  let assert 1168 = day01_part_1("inputs/day01.txt")
-
-  let assert 6 = day01_part_2("inputs/day01_example.txt")
+pub fn solutions() -> List(Solution) {
   let assert 10 =
     rotate_dial_and_count_zeroes_part_2([
       Rotation(Right, 1000),
@@ -110,6 +107,15 @@ pub fn main() -> Nil {
       Rotation(Right, 1000),
       Rotation(Left, 50),
     ])
-  let assert 7199 = day01_part_2("inputs/day01.txt")
-  Nil
+
+  [
+    Solution(1, 1, Example, Some(3), day01_part_1),
+    Solution(1, 1, Real, Some(1168), day01_part_1),
+    Solution(1, 2, Example, Some(6), day01_part_2),
+    Solution(1, 2, Real, Some(7199), day01_part_2),
+  ]
+}
+
+pub fn main() -> Nil {
+  measure_solutions(solutions())
 }
