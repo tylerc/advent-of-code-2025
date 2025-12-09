@@ -3,6 +3,7 @@ import day02
 import day03
 import day04
 import day05
+import day06
 import gleam/list
 import helpers
 
@@ -14,6 +15,7 @@ pub fn main() -> Nil {
       day03.solutions(),
       day04.solutions(),
       day05.solutions(),
+      day06.solutions(),
     ]),
   )
 }
