@@ -3,3 +3,4 @@
 /build
 /inputs
 erl_crash.dump
+*.svg

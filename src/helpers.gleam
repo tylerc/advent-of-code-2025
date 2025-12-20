@@ -12,6 +12,9 @@ pub type FileError
 @external(erlang, "file", "read_file")
 fn erlang_read_file(path: String) -> Result(BitArray, FileError)
 
+@external(erlang, "file", "write_file")
+pub fn write_file(path: String, content: String) -> Result(Nil, FileError)
+
 /// We will assume that we never try to read files that don't exist.
 fn read_file(path: String) -> String {
   let assert Ok(bits) = erlang_read_file(path)
