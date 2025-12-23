@@ -24,6 +24,7 @@ fn read_file(path: String) -> String {
 
 pub type SolultionKind {
   Example
+  ExamplePostfix(postfix: String)
   Real
 }
 
@@ -43,6 +44,7 @@ fn measure_solution(solution: Solution) {
     <> string.pad_start(int.to_string(solution.day), 2, "0")
     <> case solution.kind {
       Example -> "_example"
+      ExamplePostfix(postfix) -> "_example" <> postfix
       _ -> ""
     }
     <> ".txt"
@@ -97,7 +99,7 @@ fn measure_solution(solution: Solution) {
     <> " | "
     <> {
       case solution.kind {
-        Example -> "Example | "
+        Example | ExamplePostfix(_) -> "Example | "
         Real -> "Real    | "
       }
     }
