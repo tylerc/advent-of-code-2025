@@ -3,8 +3,6 @@ import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/option.{Some}
-import gleam/order
-import gleam/result
 import gleam/string
 import helpers.{type Solution, Example, Real, Solution, measure_solutions}
 
@@ -134,16 +132,6 @@ fn joltage_is_zero(joltage: Joltage) -> Bool {
   dict.values(joltage) |> list.all(fn(value) { value == 0 })
 }
 
-fn button_max_presses(button: List(Int), joltage_reqs: Joltage) -> Int {
-  list.map(button, fn(joltage_index) {
-    let assert Ok(val) = dict.get(joltage_reqs, joltage_index)
-    val
-  })
-  |> list.max(order.reverse(int.compare))
-  |> result.unwrap(0)
-  |> int.max(0)
-}
-
 fn button_reduce_joltage_reqs(
   button: List(Int),
   presses: Int,
@@ -155,134 +143,61 @@ fn button_reduce_joltage_reqs(
   })
 }
 
-type JoltageInfo {
-  JoltageInfo(joltage_value: Int, buttons: Buttons, button_count: Int)
-}
-
-fn result_pick_lowest(
-  accum: Result(Int, Nil),
-  next: Result(Int, Nil),
-) -> Result(Int, Nil) {
-  case accum, next {
-    Ok(last), Ok(newest) if newest < last -> Ok(newest)
-    Error(Nil), Ok(newest) -> Ok(newest)
-    _, _ -> accum
-  }
-}
-
-fn distribute_presses(
-  to_allocate: Int,
-  max_presses: List(Int),
-) -> List(List(Int)) {
-  case max_presses {
+fn possible_presses(buttons: Buttons) -> List(Buttons) {
+  case buttons {
     [] -> []
-    [last] if last < to_allocate -> []
-    [last] -> [[int.min(to_allocate, last)]]
-    [head, ..tail] -> {
-      list.range(int.min(to_allocate, head), 0)
-      |> list.map(fn(this_allocation) {
-        distribute_presses(to_allocate - this_allocation, tail)
-        |> list.map(fn(new_tail) { [this_allocation, ..new_tail] })
-        |> list.filter(fn(allocation) {
-          let sum = list.fold(allocation, 0, fn(accum, num) { accum + num })
-          sum == to_allocate
-        })
-      })
+    [button] -> [[button], []]
+    [button, ..rest] -> {
+      let remainder = possible_presses(rest)
+      list.map(remainder, fn(sub_list) { [[button, ..sub_list], sub_list] })
       |> list.flatten
     }
   }
 }
 
-// This is based on the insights from: https://github.com/michel-kraemer/adventofcode-rust/blob/main/2025/day10/src/main.rs#L114
+// Based on the insights from this post: https://www.reddit.com/r/adventofcode/comments/1pk87hl/2025_day_10_part_2_bifurcate_your_way_to_victory/
 // In particular:
-// 1. Only consider the most-constrained Joltage value at the current point in time. That is, the value affected by the fewest buttons.
-// 2. Compute every possible combination of button presses that could be applied to that Joltage value. Subsequent recursive steps can
-//    stop checking those buttons, which prunes the search space substantially.
-fn press_most_constrained(
-  buttons: Buttons,
+// 1. Find all combinations of single-or-zero button presses that make the joltages even.
+// 2. Then, divide the joltages in half and recurse, counting 2 times the minimum presses in the next recursive step.
+fn press_until_even(
+  possible_presses_list: List(Buttons),
   joltage_reqs: Joltage,
-  presses_total: Int,
-) -> Result(Int, Nil) {
+) -> Int {
   case joltage_is_zero(joltage_reqs) {
-    True -> Ok(presses_total)
+    True -> 0
     False -> {
-      let joltage_infos =
-        dict.to_list(joltage_reqs)
-        |> list.filter(fn(item) { item.1 > 0 })
-        |> list.map(fn(item) {
-          let #(joltage_index, joltage_value) = item
-          let buttons_for_joltage_index =
-            list.filter(buttons, fn(button) {
-              list.contains(button, joltage_index)
-              && button_max_presses(button, joltage_reqs) > 0
-            })
+      possible_presses_list
+      |> list.map(fn(buttons_considering) {
+        let joltage_new =
+          list.fold(buttons_considering, joltage_reqs, fn(joltage_new, button) {
+            button_reduce_joltage_reqs(button, 1, joltage_new)
+          })
+        let is_valid =
+          dict.values(joltage_new)
+          |> list.all(fn(jotlage_value) {
+            jotlage_value >= 0 && jotlage_value % 2 == 0
+          })
 
-          JoltageInfo(
-            joltage_value:,
-            buttons: buttons_for_joltage_index,
-            button_count: list.length(buttons_for_joltage_index),
-          )
-        })
-
-      let impossible_constraint =
-        list.any(joltage_infos, fn(j) {
-          j.joltage_value < 0 || { j.button_count == 0 && j.joltage_value > 0 }
-        })
-
-      case impossible_constraint {
-        True -> Error(Nil)
-        False -> {
-          use joltage_most_constrained <- result.try(
-            joltage_infos
-            |> list.filter(fn(item) { item.button_count > 0 })
-            |> list.sort(fn(a, b) {
-              case int.compare(a.button_count, b.button_count) {
-                order.Eq -> int.compare(b.joltage_value, a.joltage_value)
-                other -> other
-              }
-            })
-            |> list.first,
-          )
-
-          let buttons_next =
-            list.filter(buttons, fn(button) {
-              !list.contains(joltage_most_constrained.buttons, button)
-            })
-          let joltage_button_maxes =
-            list.map(joltage_most_constrained.buttons, fn(button) {
-              button_max_presses(button, joltage_reqs)
-            })
-          let button_allocation_combinations =
-            distribute_presses(
-              joltage_most_constrained.joltage_value,
-              joltage_button_maxes,
-            )
-
-          list.fold(
-            button_allocation_combinations,
-            Error(Nil),
-            fn(accum, allocation) {
-              let joltage_reqs_next =
-                list.zip(allocation, joltage_most_constrained.buttons)
-                |> list.fold(joltage_reqs, fn(accum, item) {
-                  let #(press_count, button) = item
-                  case press_count {
-                    0 -> accum
-                    _ -> button_reduce_joltage_reqs(button, press_count, accum)
-                  }
-                })
-
-              let result =
-                press_most_constrained(
-                  buttons_next,
-                  joltage_reqs_next,
-                  presses_total + joltage_most_constrained.joltage_value,
-                )
-              result_pick_lowest(accum, result)
-            },
-          )
+        case is_valid {
+          True ->
+            Ok(#(
+              joltage_new |> dict.map_values(fn(_key, value) { value / 2 }),
+              list.length(buttons_considering),
+            ))
+          False -> Error(Nil)
         }
-      }
+      })
+      |> list.fold(1_000_000, fn(lowest_answer, item) {
+        case item {
+          Error(_) -> lowest_answer
+          Ok(#(joltage_new, presses)) -> {
+            int.min(
+              lowest_answer,
+              presses + 2 * press_until_even(possible_presses_list, joltage_new),
+            )
+          }
+        }
+      })
     }
   }
 }
@@ -294,9 +209,11 @@ fn day10_part_2(input: String) {
 
   list.map(machines, fn(machine) {
     process.spawn(fn() {
-      let assert Ok(cost) =
-        press_most_constrained(machine.buttons, machine.joltage_reqs, 0)
-
+      let cost =
+        press_until_even(
+          possible_presses(machine.buttons),
+          machine.joltage_reqs,
+        )
       process.send(subject, cost)
     })
   })
