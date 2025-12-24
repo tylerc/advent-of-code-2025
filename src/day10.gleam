@@ -3,6 +3,7 @@ import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/option.{Some}
+import gleam/result
 import gleam/string
 import helpers.{type Solution, Example, Real, Solution, measure_solutions}
 
@@ -132,17 +133,6 @@ fn joltage_is_zero(joltage: Joltage) -> Bool {
   dict.values(joltage) |> list.all(fn(value) { value == 0 })
 }
 
-fn button_reduce_joltage_reqs(
-  button: List(Int),
-  presses: Int,
-  joltage_reqs: Joltage,
-) -> Joltage {
-  list.fold(button, joltage_reqs, fn(accum, joltage_index) {
-    let assert Ok(value) = dict.get(accum, joltage_index)
-    dict.insert(accum, joltage_index, value - presses)
-  })
-}
-
 fn possible_presses(buttons: Buttons) -> List(Buttons) {
   case buttons {
     [] -> []
@@ -155,23 +145,72 @@ fn possible_presses(buttons: Buttons) -> List(Buttons) {
   }
 }
 
+type PressDetails {
+  PressDetails(
+    buttons: Buttons,
+    button_count: Int,
+    joltage_adjustments: Dict(Int, Int),
+    even_odd_pattern: List(Bool),
+  )
+}
+
+fn buttons_to_details(buttons: Buttons, joltage_blank: Joltage) -> PressDetails {
+  let joltage_adjustments =
+    list.fold(buttons, joltage_blank, fn(joltage, button) {
+      list.fold(button, joltage, fn(joltage, joltage_index) {
+        let assert Ok(value) = dict.get(joltage, joltage_index)
+        dict.insert(joltage, joltage_index, value + 1)
+      })
+    })
+
+  PressDetails(
+    buttons:,
+    button_count: list.length(buttons),
+    joltage_adjustments:,
+    even_odd_pattern: joltage_adjustments
+      |> dict.values
+      |> list.map(fn(value) { value % 2 == 0 }),
+  )
+}
+
+fn possible_presses_to_lookup_table(
+  possibilities: List(Buttons),
+  joltage_blank: Joltage,
+) -> Dict(List(Bool), List(PressDetails)) {
+  list.fold(possibilities, dict.new(), fn(table, buttons) {
+    let details = buttons_to_details(buttons, joltage_blank)
+    let details_list =
+      dict.get(table, details.even_odd_pattern) |> result.unwrap([])
+    dict.insert(table, details.even_odd_pattern, [details, ..details_list])
+  })
+}
+
 // Based on the insights from this post: https://www.reddit.com/r/adventofcode/comments/1pk87hl/2025_day_10_part_2_bifurcate_your_way_to_victory/
 // In particular:
 // 1. Find all combinations of single-or-zero button presses that make the joltages even.
 // 2. Then, divide the joltages in half and recurse, counting 2 times the minimum presses in the next recursive step.
+// 3. We can save redundant work by pre-caching the valid presses available for each even-odd pattern of Joltages.
 fn press_until_even(
-  possible_presses_list: List(Buttons),
+  lookup: Dict(List(Bool), List(PressDetails)),
   joltage_reqs: Joltage,
 ) -> Int {
   case joltage_is_zero(joltage_reqs) {
     True -> 0
     False -> {
-      possible_presses_list
-      |> list.map(fn(buttons_considering) {
+      let even_odd_pattern =
+        joltage_reqs
+        |> dict.values
+        |> list.map(fn(value) { value % 2 == 0 })
+
+      dict.get(lookup, even_odd_pattern)
+      |> result.unwrap([])
+      |> list.map(fn(press) {
         let joltage_new =
-          list.fold(buttons_considering, joltage_reqs, fn(joltage_new, button) {
-            button_reduce_joltage_reqs(button, 1, joltage_new)
-          })
+          dict.combine(
+            joltage_reqs,
+            press.joltage_adjustments,
+            fn(existing, decrease) { existing - decrease },
+          )
         let is_valid =
           dict.values(joltage_new)
           |> list.all(fn(jotlage_value) {
@@ -182,7 +221,7 @@ fn press_until_even(
           True ->
             Ok(#(
               joltage_new |> dict.map_values(fn(_key, value) { value / 2 }),
-              list.length(buttons_considering),
+              press.button_count,
             ))
           False -> Error(Nil)
         }
@@ -193,7 +232,7 @@ fn press_until_even(
           Ok(#(joltage_new, presses)) -> {
             int.min(
               lowest_answer,
-              presses + 2 * press_until_even(possible_presses_list, joltage_new),
+              presses + 2 * press_until_even(lookup, joltage_new),
             )
           }
         }
@@ -205,28 +244,25 @@ fn press_until_even(
 fn day10_part_2(input: String) {
   let subject = process.new_subject()
   let machines = input_to_machines(input)
-  let machine_count = list.length(machines)
 
   list.map(machines, fn(machine) {
     process.spawn(fn() {
-      let cost =
-        press_until_even(
+      let joltage_blank =
+        machine.joltage_reqs |> dict.map_values(fn(_, _) { 0 })
+
+      let lookup =
+        possible_presses_to_lookup_table(
           possible_presses(machine.buttons),
-          machine.joltage_reqs,
+          joltage_blank,
         )
+
+      let cost = press_until_even(lookup, machine.joltage_reqs)
+
       process.send(subject, cost)
     })
   })
-  |> list.index_fold(0, fn(accum, _, index) {
+  |> list.index_fold(0, fn(accum, _, _) {
     let cost = process.receive_forever(subject)
-    echo {
-      "Day 10 ("
-      <> int.to_string(index + 1)
-      <> "/"
-      <> int.to_string(machine_count)
-      <> ") "
-      <> int.to_string(cost)
-    }
     accum + cost
   })
 }
